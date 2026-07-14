@@ -1,0 +1,120 @@
+<%- include('partials/_header'); -%>
+<%- include('partials/_navigation'); -%>
+
+<% if (user && user.role === 'admin') { %>
+    <div class="all-title-box">
+        <div class="container text-center"><h1><%= user.name %><span class="m_1">ADMIN</span></h1></div>
+    </div>
+
+    <div id="overviews" class="section wb">
+        <div class="container">
+            
+            <!-- 1. KULLANICI YÖNETİMİ -->
+            <div class="row mb-5">
+                <div class="col-lg-12">
+                    <button class="btn btn-warning text-white mb-3" data-toggle="modal" data-target="#addUser">
+                        <i class="fa fa-plus"></i> Create New User
+                    </button>
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>E-mail</th>
+                                <th>Role</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% for (let i = 0; i < users.length; i++) { %>
+                                <tr>
+                                    <td><%= i+1 %></td>
+                                    <td><%= users[i].name %></td>
+                                    <td><%= users[i].email %></td>
+                                    <td><%= users[i].role %></td>
+                                    <td class="text-right">
+                                        <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#updateUser<%= users[i]._id %>"><i class="fa fa-edit"></i></button>
+                                        <a class="btn btn-danger btn-sm" onclick="return confirm('Are You Sure?')" href="/users/<%= users[i]._id %>?_method=DELETE"><i class="fa fa-trash"></i></a>
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. KATEGORİ YÖNETİMİ -->
+            <div class="row mt-5">
+                <div class="col-lg-12">
+                    <button class="btn btn-success text-white mb-3" data-toggle="modal" data-target="#addCategory">
+                        <i class="fa fa-plus"></i> Create New Category
+                    </button>
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Category Name</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% for (let i = 0; i < categories.length; i++) { %>
+                                <tr>
+                                    <td><%= i+1 %></td>
+                                    <td><%= categories[i].name %></td>
+                                    <td class="text-right">
+                                        <a class="btn btn-danger btn-sm" onclick="return confirm('Are You Sure?')" href="/categories/<%= categories[i]._id %>?_method=DELETE"><i class="fa fa-trash"></i></a>
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALLAR -->
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUser" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body">
+            <form method="POST" action="/users/signup">
+                <input type="text" name="name" class="form-control mb-2" placeholder="Name" required>
+                <input type="email" name="email" class="form-control mb-2" placeholder="Email" required>
+                <input type="password" name="password" class="form-control mb-2" placeholder="Password" required>
+                <select name="role" class="form-control mb-2"><option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Admin</option></select>
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </form>
+        </div></div></div>
+    </div>
+
+    <!-- Update User Modals -->
+    <% for (let i = 0; i < users.length; i++) { %>
+    <div class="modal fade" id="updateUser<%= users[i]._id %>" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body">
+            <form method="POST" action="/users/<%= users[i]._id %>?_method=PUT">
+                <input type="text" name="name" class="form-control mb-2" value="<%= users[i].name %>" required>
+                <input type="email" name="email" class="form-control mb-2" value="<%= users[i].email %>" required>
+                <select name="role" class="form-control mb-2">
+                    <option value="student" <%= users[i].role === 'student' ? 'selected' : '' %>>Student</option>
+                    <option value="teacher" <%= users[i].role === 'teacher' ? 'selected' : '' %>>Teacher</option>
+                    <option value="admin" <%= users[i].role === 'admin' ? 'selected' : '' %>>Admin</option>
+                </select>
+                <button type="submit" class="btn btn-info">Update User</button>
+            </form>
+        </div></div></div>
+    </div>
+    <% } %>
+
+    <!-- Add Category Modal -->
+    <div class="modal fade" id="addCategory" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body">
+            <form method="POST" action="/categories">
+                <input type="text" name="name" class="form-control mb-2" placeholder="Category Name" required>
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </form>
+        </div></div></div>
+    </div>
+<% } %>
+
+<%- include('partials/_footer'); -%>
