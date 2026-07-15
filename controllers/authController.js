@@ -27,6 +27,7 @@ const loginUser = asynchandler(async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email });
+
         if (user) {
             bcrypt.compare(password, user.password, (err, same) => {
                 if (same) {
@@ -48,7 +49,9 @@ const loginUser = asynchandler(async (req, res) => {
 });
 
 const logoutUser = (req, res) => {
-    req.session.destroy(() => { res.redirect('/'); });
+    req.session.destroy(() => {
+        res.redirect('/');
+    });
 };
 
 const getDashboardPage = asynchandler(async (req, res) => {
@@ -67,19 +70,32 @@ const getDashboardPage = asynchandler(async (req, res) => {
 });
 
 const deleteUser = asynchandler(async (req, res) => {
-    const user = await User.findByIdAndDelete(req.params.id);
-    await Course.deleteMany({ user: req.params.id });
-    req.flash("success", `${user.name} has been removed successfully`);
-    res.status(200).redirect('/users/dashboard');
+    try {
+        const user = await User.findByIdAndDelete(req.params.id);
+        await Course.deleteMany({ user: req.params.id });
+        req.flash("success", `${user.name} has been removed successfully`);
+        res.status(200).redirect('/users/dashboard');
+    } catch (error) {
+        res.status(400).json({ status: 'fail', error });
+    }
 });
 
 const updateUser = asynchandler(async (req, res) => {
-    const { name, email, role } = req.body;
-    const user = await User.findByIdAndUpdate(req.params.id, { name, email, role }, { new: true });
-    req.flash("success", `${user.name} updated successfully`);
-    res.status(200).redirect('/users/dashboard');
+    try {
+        const { name, email, role } = req.body;
+        const user = await User.findByIdAndUpdate(req.params.id, { name, email, role }, { new: true });
+        req.flash("success", `${user.name} updated successfully`);
+        res.status(200).redirect('/users/dashboard');
+    } catch (error) {
+        res.status(400).json({ status: 'fail', error });
+    }
 });
 
 export default {
-    createUser, loginUser, logoutUser, getDashboardPage, deleteUser, updateUser
+    createUser,
+    loginUser,
+    logoutUser,
+    getDashboardPage,
+    deleteUser,
+    updateUser
 };

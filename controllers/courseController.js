@@ -1,7 +1,11 @@
 import asynchandler from 'express-async-handler';
-import Course from '../models/Course.js';
+import bcrypt from 'bcrypt';
+import { validationResult } from 'express-validator';
 import User from '../models/User.js';
 import Category from '../models/Category.js';
+import Course from '../models/Course.js';
+
+// ... geri kalan kodların burada devam etsin ...
 
 const createCourse = asynchandler(async (req, res) => {
     try {
@@ -14,10 +18,8 @@ const createCourse = asynchandler(async (req, res) => {
         req.flash("success", `${course.name} has been created successfully`);
         res.status(201).redirect('/courses');
     } catch (error) {
-        // HATAYI TERMİNALE YAZDIRMAK İÇİN BU SATIRI EKLEDİK
         console.log("KURS OLUŞTURULURKEN HATA ÇIKTI:", error); 
-        
-        req.flash("error", `Something happend: ERROR!`);
+        req.flash("error", `Something happened: ERROR!`);
         res.status(400).redirect('/users/dashboard');
     }
 });
@@ -42,7 +44,6 @@ const getAllCourses = asynchandler(async (req, res) => {
             filter.category = null;
         }
 
-        // sort('-createdAt') fonsyonu en güncel olandan eskiye doğru sıralar
         const courses = await Course.find({
             $or: [
                 { name: { $regex: '.*' + filter.name + '.*', $options: 'i' } },
@@ -59,21 +60,14 @@ const getAllCourses = asynchandler(async (req, res) => {
             page_name: 'courses',
         });
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
 const getCourse = asynchandler(async (req, res) => {
     try {
-        // populate('user') fonksyonu içinde bulundurduğu user id'sini
-        // kullanarak o kullanıcının tüm özeliiklerini almaya yarıyor.
         const user = await User.findById(req.session.userID);
-        const course = await Course.findOne({ slug: req.params.slug }).populate(
-            'user'
-        );
+        const course = await Course.findOne({ slug: req.params.slug }).populate('user');
         const categories = await Category.find();
         res.status(200).render('course', {
             course,
@@ -82,10 +76,7 @@ const getCourse = asynchandler(async (req, res) => {
             categories,
         });
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
@@ -94,13 +85,9 @@ const enrollCourse = asynchandler(async (req, res) => {
         const user = await User.findById(req.session.userID);
         await user.courses.push({ _id: req.body.course_id });
         await user.save();
-
         res.status(200).redirect('/users/dashboard');
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
@@ -109,47 +96,33 @@ const releaseCourse = asynchandler(async (req, res) => {
         const user = await User.findById(req.session.userID);
         await user.courses.pull({ _id: req.body.course_id });
         await user.save();
-
         res.status(200).redirect('/users/dashboard');
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
 const deleteCourse = asynchandler(async (req, res) => {
     try {
         const course = await Course.findOneAndRemove({ slug: req.params.slug });
-        console.log(course);
         req.flash("success", `${course.name} has been removed successfully`);
         res.status(200).redirect('/users/dashboard');
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
 const updateCourse = asynchandler(async (req, res) => {
     try {
         const course = await Course.findOne({ slug: req.params.slug });
-
         course.name = req.body.name;
         course.description = req.body.description;
         course.category = req.body.category;
-
-        course.save();
-
+        await course.save();
         req.flash("success", `${course.name} has been updated successfully`);
         res.status(200).redirect('/users/dashboard');
     } catch (error) {
-        res.status(400).json({
-            status: 'fail',
-            error,
-        });
+        res.status(400).json({ status: 'fail', error });
     }
 });
 
