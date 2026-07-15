@@ -1,18 +1,14 @@
-/* Sistemi kullanan kullanıcının rolü,  bu fonksyonu kullandığımız 
-yerden yollanan kullanıcı rolleri arasında değilse 401 yetkisi yok 
-hata kodunu alırken. Aksi durumda işlem devam edecektir. 
-
-If the role of the user using the system is not among the user 
-roles sent from where we use this function, when getting the 401 
-not authorized error code. Otherwise, the process will continue.
-*/
 export default (roles) => {
     return (req, res, next) => {
-        const userRole = req.body.role;
+        // Kullanıcı giriş yapmış mı ve rolü var mı kontrol et
+        const userRole = res.locals.userIN ? res.locals.userIN.role : null;
+        
+        // Kullanıcının rolü, izin verilen roller listesinde (roles) var mı?
         if (roles.includes(userRole)) {
-            next();
+            next(); // Yetkisi var, işlemi yapmasına izin ver
         } else {
-            return res.status(401).send("You Can't Do It");
+            // Yetkisi yoksa 401 hatası ver (İstersen burayı res.redirect('/') yapabilirsin)
+            return res.status(401).send('BU İŞLEMİ YAPMAYA VEYA SAYFAYI GÖRÜNTÜLEMEYE YETKİNİZ YOK');
         }
     };
 };
