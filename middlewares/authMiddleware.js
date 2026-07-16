@@ -4,76 +4,48 @@ import User from '../models/User.js';
 
 export default async (req, res, next) => {
     try {
-        const accessToken = req.cookies.jwt;
-        const refreshToken = req.cookies.refreshToken;
+        const authHeader = req.headers.authorization;
+        let accessToken;
 
-        // Hiç token yoksa direkt login'e at
-        if (!accessToken && !refreshToken) {
-            return res.redirect('/login');
+        if (authHeader && authHeader.startsWith('Bearer')) {
+            accessToken = authHeader.split(' ')[1];
         }
 
-        // --- KARA LİSTE (BLACKLIST) KONTROLLERİ BAŞLANGICI ---
-        if (accessToken) {
-            const isBlacklisted = await Blacklist.findOne({ token: accessToken });
-            if (isBlacklisted) {
-                return res.redirect('/login'); // Token kara listedeyse direkt reddet
-            }
+        // 1. TOKEN YOKSA (F5 atıldıysa veya normal linke tıklandıysa)
+        if (!accessToken) {
+            // İstek tarayıcıdan (HTML) geliyorsa logine at, API ise JSON dön
+            if (req.accepts('html')) return res.redirect('/login');
+            return res.status(401).json({ status: 'fail', message: 'Lütfen giriş yapın (Token bulunamadı)' });
         }
 
-        if (refreshToken) {
-            const isRefreshBlacklisted = await Blacklist.findOne({ token: refreshToken });
-            if (isRefreshBlacklisted) {
-                return res.redirect('/login'); // Refresh token kara listedeyse direkt reddet
-            }
+        // 2. KARA LİSTE KONTROLÜ
+        const isBlacklisted = await Blacklist.findOne({ token: accessToken });
+        if (isBlacklisted) {
+            if (req.accepts('html')) return res.redirect('/login');
+            return res.status(401).json({ status: 'fail', message: 'Bu oturum sonlandırılmış, tekrar giriş yapın' });
         }
-        // --- KARA LİSTE KONTROLLERİ BİTİŞİ ---
 
+        // 3. TOKEN DOĞRULAMA
         try {
-            // 1. ADIM: Access Token'ı doğrulamaya çalış
-            if (accessToken) {
-                const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-                const user = await User.findById(decoded.userId);
-                if (user) return next(); // Her şey yolundaysa devam et
+            const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+            const user = await User.findById(decoded.userId);
+            
+            if (!user) {
+                if (req.accepts('html')) return res.redirect('/login');
+                return res.status(401).json({ status: 'fail', message: 'Kullanıcı bulunamadı' });
             }
+
+            res.locals.userIN = user;
+            req.user = user; 
+            next();
+
         } catch (error) {
-            // Eğer Access Token'ın SÜRESİ DOLMUŞSA (TokenExpiredError) hatayı yakala
-            if (error.name !== 'TokenExpiredError') {
-                return res.redirect('/login'); // Başka bir hataysa (sahte token vs) login'e at
-            }
+            // Süresi dolmuşsa veya geçersizse
+            if (req.accepts('html')) return res.redirect('/login');
+            return res.status(401).json({ status: 'fail', message: 'Geçersiz veya süresi dolmuş Token' });
         }
-
-        // 2. ADIM: Access Token yok veya süresi dolmuş, o zaman Refresh Token'a bak
-        if (refreshToken) {
-            try {
-                // Refresh token geçerli mi?
-                const decodedRefresh = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-                const user = await User.findById(decodedRefresh.userId);
-
-                if (!user) return res.redirect('/login');
-
-                // SİHİR BURADA: Kullanıcıya çaktırmadan yeni bir Access Token üret
-                const newAccessToken = jwt.sign(
-                    { userId: user._id },
-                    process.env.JWT_SECRET,
-                    { expiresIn: process.env.JWT_EXPIRES_IN }
-                );
-
-                // Yeni Access Token'ı çereze yaz (15 dakika)
-                res.cookie('jwt', newAccessToken, {
-                    httpOnly: true,
-                    maxAge: 1000 * 60 * 15
-                });
-
-                return next(); // İşleme kaldığı yerden devam etmesini sağla
-            } catch (refreshError) {
-                // Refresh token da bozuk veya süresi dolmuşsa yapacak bir şey yok, tekrar giriş yapmalı
-                return res.redirect('/login');
-            }
-        } else {
-            return res.redirect('/login');
-        }
-
     } catch (error) {
-        return res.redirect('/login');
+        if (req.accepts('html')) return res.redirect('/login');
+        return res.status(500).json({ status: 'error', message: 'Sunucu hatası' });
     }
 };

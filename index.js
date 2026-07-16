@@ -6,9 +6,9 @@ import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import flash from 'connect-flash';
 import methodOverride from 'method-override';
-import cookieParser from 'cookie-parser'; // EKLENDİ
-import jwt from 'jsonwebtoken'; // EKLENDİ
-import User from './models/User.js'; // EKLENDİ
+// cookieParser'ı artık kullanmadığımız için sildik
+import jwt from 'jsonwebtoken';
+import User from './models/User.js';
 
 import pageRouter from './routers/pageRouter.js';
 import coursesRouter from './routers/courseRouter.js';
@@ -28,7 +28,6 @@ global.userIN = null;
 app.use(express.static('public'));
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true })); 
-app.use(cookieParser()); // EKLENDİ
 app.set('trust proxy', 1);
 app.use(session({
     secret: 'my_keyboard_cat',
@@ -45,79 +44,43 @@ app.use(methodOverride('_method', {
     methods: ['POST', 'GET'],
 }));
 
-// Routers - REFRESH TOKEN VE BLACKLIST DESTEKLİ GÜNCEL GLOBAL MIDDLEWARE
+// Routers - BEARER TOKEN DESTEKLİ GÜNCEL GLOBAL MIDDLEWARE
 app.use('*', async (req, res, next) => {
-    const accessToken = req.cookies.jwt;
-    const refreshToken = req.cookies.refreshToken;
+    // Varsayılan olarak misafir kabul et
+    global.userIN = null;
+    res.locals.userIN = null;
 
-    // --- KARA LİSTE KONTROLÜ (EKLENDİ) ---
-    if (accessToken) {
-        const isBlacklisted = await Blacklist.findOne({ token: accessToken });
-        if (isBlacklisted) {
-            global.userIN = null;
-            res.locals.userIN = null;
-            return next(); // Kara listedeyse sonraki middleware'e geç (misafir olarak devam et)
-        }
+    // Token'ı Cookie'den değil, Header'dan (Authorization) al
+    const authHeader = req.headers.authorization;
+    let accessToken;
+
+    if (authHeader && authHeader.startsWith('Bearer')) {
+        accessToken = authHeader.split(' ')[1];
     }
 
-    if (refreshToken) {
-        const isRefreshBlacklisted = await Blacklist.findOne({ token: refreshToken });
-        if (isRefreshBlacklisted) {
-            global.userIN = null;
-            res.locals.userIN = null;
-            return next(); // Refresh token da kara listedeyse misafir yap
-        }
+    // Eğer Header'da token yoksa hiç zorlama, misafir olarak devam et
+    if (!accessToken) {
+        return next();
     }
-    // ------------------------------------
 
     try {
-        if (accessToken) {
-            // 1. Access Token varsa ve geçerliyse doğrula
-            const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-            const user = await User.findById(decoded.userId);
-            if (user) {
-                global.userIN = user._id;
-                res.locals.userIN = user;
-                return next();
-            }
+        // --- KARA LİSTE KONTROLÜ ---
+        const isBlacklisted = await Blacklist.findOne({ token: accessToken });
+        if (isBlacklisted) {
+            return next(); // Token kara listedeyse misafir yap
+        }
+
+        // --- TOKEN DOĞRULAMA ---
+        const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId);
+        
+        if (user) {
+            global.userIN = user._id;
+            res.locals.userIN = user;
         }
     } catch (error) {
-        // Access Token süresi dolmuşsa hatayı görmezden gel, aşağıdaki Refresh Token adımına geçecek
-    }
-
-    // 2. Access Token yoksa veya süresi dolmuşsa Refresh Token'ı kontrol et
-    if (refreshToken) {
-        try {
-            const decodedRefresh = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-            const user = await User.findById(decodedRefresh.userId);
-
-            if (user) {
-                // Kullanıcıya hissettirmeden yeni bir Access Token üret (Örn: 15 dk)
-                const newAccessToken = jwt.sign(
-                    { userId: user._id },
-                    process.env.JWT_SECRET,
-                    { expiresIn: process.env.JWT_EXPIRES_IN }
-                );
-
-                // Yeni Access Token'ı çereze yaz
-                res.cookie('jwt', newAccessToken, {
-                    httpOnly: true,
-                    maxAge: 1000 * 60 * 15 // 15 dakika
-                });
-
-                global.userIN = user._id;
-                res.locals.userIN = user;
-                return next();
-            }
-        } catch (refreshError) {
-            // Refresh token da geçersiz veya süresi dolmuşsa yapacak bir şey yok
-            global.userIN = null;
-            res.locals.userIN = null;
-        }
-    } else {
-        // Hiç token yoksa
-        global.userIN = null;
-        res.locals.userIN = null;
+        // Eğer token'ın süresi bitmişse veya geçersizse hiçbir şey yapma (misafir olarak kalır).
+        // Kullanıcıyı yetki gerektiren bir sayfadan atmak, bu dosyanın değil 'authMiddleware'in görevidir.
     }
     
     next();

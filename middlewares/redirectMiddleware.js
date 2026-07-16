@@ -1,21 +1,17 @@
-import jwt from 'jsonwebtoken';
-
 export default (req, res, next) => {
-    const token = req.cookies.jwt;
+    // 1. Çerez yerine Header'a (Authorization) bakıyoruz
+    const authHeader = req.headers.authorization;
+    let token = null;
 
-    if (token) {
-        // Eğer token varsa doğruluğunu kontrol et
-        jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-            if (err) {
-                // Token geçersizse sayfaya girmesine izin ver
-                next();
-            } else {
-                // Token geçerliyse ana sayfaya yolla
-                return res.redirect('/');
-            }
-        });
-    } else {
-        // Hiç token yoksa login sayfasına girmesine izin ver
-        next();
+    if (authHeader && authHeader.startsWith('Bearer')) {
+        token = authHeader.split(' ')[1];
     }
+
+    // 2. Eğer token varsa (yani kişi zaten giriş yapmışsa) onu anasayfaya veya dashboarda at
+    if (token) {
+        return res.redirect('/'); 
+    }
+    
+    // 3. Token yoksa (giriş yapmamışsa) sayfayı görüntülemesine izin ver (login/register sayfası)
+    next();
 };
