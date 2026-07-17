@@ -6,9 +6,12 @@ import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import flash from 'connect-flash';
 import methodOverride from 'method-override';
-// cookieParser'ı artık kullanmadığımız için sildik
 import jwt from 'jsonwebtoken';
 import User from './models/User.js';
+
+// SWAGGER İMPORTLARI
+import swaggerJsDoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 
 import pageRouter from './routers/pageRouter.js';
 import coursesRouter from './routers/courseRouter.js';
@@ -17,6 +20,32 @@ import userRouter from './routers/userRouter.js';
 
 const app = express();
 dotenv.config();
+
+// --- SWAGGER KONFİGÜRASYONU ---
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'SmartEDU API',
+            version: '1.0.0',
+            description: 'SmartEDU Projesi API Dokümantasyonu'
+        },
+        servers: [{ url: 'http://localhost:3000' }],
+        // Yetkilendirme butonunun aktif olması için gereken yapı:
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                },
+            },
+        },
+    },
+    apis: ['./routers/*.js'], 
+};
+
+const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 // Template Engine
 app.set('view engine', 'ejs');
@@ -36,6 +65,10 @@ app.use(session({
     store: MongoStore.create({ mongoUrl: 'mongodb://127.0.0.1:27017/smartedu' })
 }));
 app.use(flash());
+
+// SWAGGER ROUTE
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
 app.use((req, res, next) => {
     res.locals.flashMessage = req.flash();
     next();
@@ -46,11 +79,9 @@ app.use(methodOverride('_method', {
 
 // Routers - BEARER TOKEN DESTEKLİ GÜNCEL GLOBAL MIDDLEWARE
 app.use('*', async (req, res, next) => {
-    // Varsayılan olarak misafir kabul et
     global.userIN = null;
     res.locals.userIN = null;
 
-    // Token'ı Cookie'den değil, Header'dan (Authorization) al
     const authHeader = req.headers.authorization;
     let accessToken;
 
@@ -58,19 +89,16 @@ app.use('*', async (req, res, next) => {
         accessToken = authHeader.split(' ')[1];
     }
 
-    // Eğer Header'da token yoksa hiç zorlama, misafir olarak devam et
     if (!accessToken) {
         return next();
     }
 
     try {
-        // --- KARA LİSTE KONTROLÜ ---
         const isBlacklisted = await Blacklist.findOne({ token: accessToken });
         if (isBlacklisted) {
-            return next(); // Token kara listedeyse misafir yap
+            return next(); 
         }
 
-        // --- TOKEN DOĞRULAMA ---
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
         const user = await User.findById(decoded.userId);
         
@@ -79,10 +107,8 @@ app.use('*', async (req, res, next) => {
             res.locals.userIN = user;
         }
     } catch (error) {
-        // Eğer token'ın süresi bitmişse veya geçersizse hiçbir şey yapma (misafir olarak kalır).
-        // Kullanıcıyı yetki gerektiren bir sayfadan atmak, bu dosyanın değil 'authMiddleware'in görevidir.
+        // Token geçersizse misafir olarak devam et
     }
-    
     next();
 });
 
